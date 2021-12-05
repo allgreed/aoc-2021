@@ -21,7 +21,6 @@ pub fn main() anyerror!void {
     var in_stream = buf_reader.reader();
 
     var numbers = std.ArrayList(u32).init(allocator);
-    // TODO: how to free it?
 
     const first_line = try in_stream.readUntilDelimiterOrEof(&buf, '\n');
     var comma_splitter = std.mem.split(first_line.?, ",");
@@ -30,7 +29,6 @@ pub fn main() anyerror!void {
     }
 
     var boards = std.ArrayList(Board).init(allocator);
-    // TODO: free
     var i: usize = 0;
     var j: usize = 0;
     var buffer: [25]u32 = undefined;
@@ -120,29 +118,25 @@ const Board = struct {
     }
 
     fn is_winner(self: Board) bool {
-        var i: usize = 0;
-        // TODO: ranges?
-        while (i < 5) {
+        for (range(0, 5)) |_, i| {
             if (self.marks[i][i]) {
-                var j: usize = 0;
                 var winner = true;
-                while (j < 5) {
+
+                for (range(0, 5)) |_, j|
                     winner = winner and self.marks[i][j];
-                    j += 1;
-                }
                 if (winner) return true;
 
                 winner = true;
-                j = 0;
-                while (j < 5) {
+                for (range(0, 5)) |_, j|
                     winner = winner and self.marks[j][i];
-                    j += 1;
-                }
                 if (winner) return true;
             }
-            i += 1;
         }
 
         return false;
     }
 };
+
+fn range(start: usize, end: usize) []const u0 {
+    return @as([*]u0, undefined)[start..end];
+}
