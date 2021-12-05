@@ -21,6 +21,7 @@ pub fn main() anyerror!void {
     var in_stream = buf_reader.reader();
 
     var numbers = std.ArrayList(u32).init(allocator);
+    defer numbers.deinit();
 
     const first_line = try in_stream.readUntilDelimiterOrEof(&buf, '\n');
     var comma_splitter = std.mem.split(first_line.?, ",");
@@ -29,6 +30,7 @@ pub fn main() anyerror!void {
     }
 
     var boards = std.ArrayList(Board).init(allocator);
+    defer boards.deinit();
     var i: usize = 0;
     var j: usize = 0;
     var buffer: [25]u32 = undefined;
@@ -52,6 +54,7 @@ pub fn main() anyerror!void {
     try boards.append(Board.init(buffer));
 
     var seen = std.ArrayList(bool).init(allocator);
+    defer seen.deinit();
     try seen.ensureTotalCapacity(boards.items.len);
     for (boards.items) |_| {
         try seen.append(false);
