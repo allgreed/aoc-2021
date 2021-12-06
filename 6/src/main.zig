@@ -1,8 +1,4 @@
 const std = @import("std");
-const expect = std.testing.expect;
-const max3 = std.math.max3;
-const max = std.math.max;
-const min = std.math.min;
 
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -38,20 +34,20 @@ pub fn main() anyerror!void {
         lf_buckets[lf] += 1;
     }
 
-    for (range(0, 256)) |_| {
+    for (range(80)) |_| {
         var carry: u64 = 0;
-        for (range(0, lf_buckets.len)) |_, i| {
-            const idx = lf_buckets.len - i - 1;
-            const count = lf_buckets[idx];
+        for (range(lf_buckets.len)) |_, idx| {
+            const i = lf_buckets.len - idx - 1;
 
-            lf_buckets[idx] = carry;
+            const count = lf_buckets[i];
+
+            lf_buckets[i] = carry;
             carry = count;
         }
         lf_buckets[8] = carry;
         lf_buckets[6] += carry;
     }
 
-    // TODO: is there stdlib for that?
     var cumsum: u64 = 0;
     for (lf_buckets) |count| {
         cumsum += count;
@@ -59,6 +55,6 @@ pub fn main() anyerror!void {
     std.log.info("{d}", .{cumsum});
 }
 
-fn range(start: usize, end: usize) []const u0 {
-    return @as([*]u0, undefined)[start..end];
+fn range(count: usize) []const u0 {
+    return @as([*]u0, undefined)[0..count];
 }
