@@ -62,6 +62,7 @@ def main():
 
         cumsum += x
 
+    assert cumsum == 61229
     print(cumsum)
 
 
