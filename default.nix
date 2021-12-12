@@ -7,10 +7,17 @@ let
     # obtain via `git ls-remote https://github.com/nixos/nixpkgs nixos-unstable`
   };
   pkgs = import nixpkgs { config = {}; };
+  pythonCore = pkgs.python38;
+  pythonPkgs = python-packages: with python-packages; [
+      pudb
+      ptpython
+    ]; 
+  myPython = pythonCore.withPackages pythonPkgs;
 in
 pkgs.mkShell {
   buildInputs = with pkgs; [
     zig
     zls
+    myPython
   ];
 }
