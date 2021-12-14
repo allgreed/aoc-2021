@@ -23,21 +23,29 @@ pub fn main() anyerror!void {
     var buf: [1024 * 4]u8 = undefined;
     var in_stream = file.reader();
 
-    var polymer = Lu8{};
-
     const polymer_line = (try in_stream.readUntilDelimiterOrEof(&buf, '\n')).?;
 
-    var initial_node = try mk_node(polymer_line[0], allocator);
-    polymer.prepend(initial_node);
-    var head: *Lu8Node = initial_node;
-    for (range(polymer_line.len - 1)) |_, _i| {
-        const i = _i + 1;
+    var pairs = std.StringArrayHashMap(u64).init(allocator);
+    {
+        var cp: [2]u8 = undefined;
+        cp[1] = polymer_line[0];
 
-        var new_node = try mk_node(polymer_line[i], allocator);
-        head.insertAfter(new_node);
-        head = new_node;
+        for (range(polymer_line.len - 1)) |_, _i| {
+            const i = _i + 1;
+            cp[0] = cp[1];
+            cp[1] = polymer_line[i];
+
+            // TODO: uncrap this o.0 -> there has to be a smarter way :C
+            var fuj = try allocator.alloc(u8, 2);
+            std.mem.copy(u8, fuj[0..fuj.len], &cp);
+
+            const gpr = try pairs.getOrPut(fuj);
+            if (!gpr.found_existing) {
+                gpr.value_ptr.* = 0;
+            }
+            gpr.value_ptr.* += 1;
+        }
     }
-
     var rules = std.StringHashMap(u8).init(allocator);
     _ = try in_stream.readUntilDelimiterOrEof(&buf, '\n');
     while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
@@ -47,90 +55,81 @@ pub fn main() anyerror!void {
         _ = space_splitter.next();
         const c = space_splitter.next().?[0];
 
-        var p1 = try allocator.alloc(u8, p1_view.len);
+        var p1 = try allocator.alloc(u8, 2);
         std.mem.copy(u8, p1[0..p1.len], p1_view);
 
         try rules.put(p1, c);
     }
 
-    var insertQ = std.ArrayList(InsertionCommand).init(allocator);
-
-    for (range(10)) |_| {
-        var cp: [2]u8 = undefined;
-        var it = polymer.first;
-        var pp: *Lu8Node = it.?;
-        cp[0] = it.?.data;
-        it = it.?.next;
-        cp[1] = it.?.data;
-
-        try insertQ.append(InsertionCommand{ .after = pp, .data = rules.get(cp[0..2]).? });
-
-        pp = it.?;
-        it = it.?.next;
-
-        while (it) |node| : (it = node.next) {
-            cp[0] = cp[1];
-            cp[1] = node.data;
-
-            try insertQ.append(InsertionCommand{ .after = pp, .data = rules.get(cp[0..2]).? });
-
-            pp = node;
-        }
-
-        while (insertQ.popOrNull()) |ic| {
-            ic.after.insertAfter(try mk_node(ic.data, allocator));
-        }
-    }
-
-    var counters = std.AutoHashMap(u8, u64).init(allocator);
+    print("{s}", .{pairs.keys()});
+    print("{d}", .{pairs.values()});
 
     {
-        var it = polymer.first;
-        while (it) |node| : (it = node.next) {
-            const c = node.data;
+        var it = pairs.iterator();
+        while (it.next()) |pair| {
+            //const count = pair.value_ptr.*;
+            const count = 1;
+            pair.value_ptr.* -= count;
+            const key = pair.key_ptr.*;
 
-            const gpr = try counters.getOrPut(c);
+            const c = rules.get(key).?;
+            print("{s}", .{pair});
+
+            var cp: [2]u8 = undefined;
+
+            cp[0] = key[0];
+            cp[1] = c;
+
+            var fuj = try allocator.alloc(u8, 2);
+            std.mem.copy(u8, fuj[0..fuj.len], &cp);
+            var gpr = try pairs.getOrPut(fuj);
             if (!gpr.found_existing) {
                 gpr.value_ptr.* = 0;
             }
-            gpr.value_ptr.* += 1;
+            gpr.value_ptr.* += count;
+
+            cp[0] = c;
+            cp[0] = key[1];
+            fuj = try allocator.alloc(u8, 2);
+            std.mem.copy(u8, fuj[0..fuj.len], &cp);
+            gpr = try pairs.getOrPut(fuj);
+            if (!gpr.found_existing) {
+                gpr.value_ptr.* = 0;
+            }
+            gpr.value_ptr.* += count;
         }
     }
 
-    var maxx: u64 = 0;
-    var minn: u64 = std.math.maxInt(u64);
-    {
-        var it = counters.valueIterator();
-        while (it.next()) |_v| {
-            const v = _v.*;
-            maxx = std.math.max(maxx, v);
-            minn = std.math.min(minn, v);
-        }
-    }
+    print("{s}", .{pairs.keys()});
+    print("{d}", .{pairs.values()});
 
-    print("{d}", .{maxx - minn});
-    //print("{d}", .{counters});
+    //{
+    //var it = polymer.first;
+    //while (it) |node| : (it = node.next) {
+    //const c = node.data;
+
+    //const gpr = try counters.getOrPut(c);
+    //if (!gpr.found_existing) {
+    //gpr.value_ptr.* = 0;
+    //}
+    //gpr.value_ptr.* += 1;
+    //}
+    //}
+
+    //var maxx: u64 = 0;
+    //var minn: u64 = std.math.maxInt(u64);
+    //{
+    //var it = counters.valueIterator();
+    //while (it.next()) |_v| {
+    //const v = _v.*;
+    //maxx = std.math.max(maxx, v);
+    //minn = std.math.min(minn, v);
+    //}
+    //}
+
+    //print("{d}", .{maxx - minn});
 }
 
 fn range(count: usize) []const u0 {
     return @as([*]u0, undefined)[0..count];
-}
-
-fn mk_node(data: u8, allocator: *std.mem.Allocator) !*Lu8Node {
-    var node_mem = try allocator.alloc(Lu8Node, 1);
-    node_mem[0] = Lu8Node{ .data = data };
-    return &node_mem[0];
-}
-
-const InsertionCommand = struct {
-    after: *Lu8Node,
-    data: u8,
-};
-
-fn dump_list(list: std.SinglyLinkedList(u8)) void {
-    var it = list.first;
-    while (it) |node| : (it = node.next) {
-        std.debug.print("{c}", .{node.data});
-    }
-    std.debug.print("\n", .{});
 }
