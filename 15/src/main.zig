@@ -1,5 +1,6 @@
 const std = @import("std");
 const print = std.log.info;
+const og = @import("olgierdlib");
 
 const inf = std.math.maxInt(u32); // fairly close
 
