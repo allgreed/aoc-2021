@@ -1,0 +1,46 @@
+const std = @import("std");
+const og = @import("olgierdlib");
+
+const print = std.log.info;
+const range = og.range;
+
+pub fn main() anyerror!void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+
+    const allocator = &arena.allocator;
+    var arg_it = std.process.args();
+    _ = arg_it.skip();
+
+    const filename = try (arg_it.next(allocator) orelse {
+        std.debug.warn("Missing input filename\n", .{});
+        return error.InvalidArgs;
+    });
+
+    var file = try std.fs.cwd().openFile(filename, .{});
+    defer file.close();
+
+    var buf: [1024 * 4]u8 = undefined;
+    var in_stream = file.reader();
+
+    const da_line = try in_stream.readUntilDelimiterOrEof(&buf, '\n');
+    var buffer: [1000]u1 = undefined;
+
+    var fuj: u8 = 210;
+    var ble = extract_bits_from_byte(u3, fuj, 0);
+    //print("{s}", .{da_line});
+    print("{d}", .{ble});
+}
+
+fn extract_bits_from_byte(comptime T: type, byte: u8, offset: u3) T {
+    // assert offset + bits of type <= 8
+
+    const computed_offset = @truncate(u3, (8 - @intCast(u4,offset))) - @bitSizeOf(T);
+    const src = byte >> computed_offset;
+    return @truncate(T, src);
+}
+
+const PacketHeader = struct {
+    version: u3,
+    type_id: u3,
+};
