@@ -103,6 +103,7 @@ fn mk_split(val: u32, p: *Snumber, allocator: *std.mem.Allocator) *Snumber {
 
 fn split(s: *Snumber, allocator: *std.mem.Allocator) bool {
     var result = false;
+    // would be hacky to symetrize
     if (s.left == Scontent.direct and s.left.direct >= 10) {
         s.left = shift_snumber(mk_split(s.left.direct, s, allocator));
         result = true;
@@ -130,90 +131,82 @@ fn find_explode(s: *Snumber, depth: u32) ?*Snumber {
         return s;
     }
 
-    if (s.left == Scontent.complex and result == null) {
-        result = find_explode(s.left.complex, depth + 1);
-    }
-
-    if (s.right == Scontent.complex and result == null) {
-        result = find_explode(s.right.complex, depth + 1);
+    inline for (Directions) |d| {
+        const child = access_dp(s, d);
+        if (child.* == Scontent.complex and result == null) {
+            result = find_explode(child.complex, depth + 1);
+        }
     }
 
     return result;
 }
 
+const Direction = enum {
+    Left,
+    Right,
+
+    pub fn opposite(self: Direction) Direction {
+        return switch (self) {
+            .Left => .Right,
+            .Right => .Left,
+        };
+    }
+};
+
+const Directions = [_]Direction{ Direction.Left, Direction.Right };
+
 fn explode(s: *Snumber) bool {
     const maybe_explosion_point = find_explode(s, 0);
-
     if (maybe_explosion_point == null)
         return false;
+
     const ep = maybe_explosion_point.?;
 
-    //print("ep", .{});
-    //ep.dump();
+    inline for (Directions) |d| {
+        var maybe_cur: ?*Snumber = ep;
+        var last: *Snumber = ep;
 
-    var maybe_cur: ?*Snumber = ep;
-    var last: *Snumber = ep;
-    if (maybe_cur.?.parent.?.right == Scontent.direct)
-        maybe_cur.?.parent.?.right.direct = maybe_cur.?.parent.?.right.direct + ep.right.direct
-    else {
-        flip_r: while (maybe_cur) |cur| : (maybe_cur = cur.parent) {
-            if (cur.right == Scontent.direct and cur != ep) {
-                //print("right - direct", .{});
-                //cur.dump();
+        flip_p: while (maybe_cur) |cur| : (maybe_cur = cur.parent) {
+            var elem_d = access_dp(cur, d);
+            const ep_dv = access_dp(ep, d).direct;
 
-                cur.right.direct = cur.right.direct + ep.right.direct;
-                break :flip_r;
+            if (elem_d.* == Scontent.direct and cur != ep) {
+                elem_d.* = shift_u32(elem_d.direct + ep_dv);
+                break :flip_p;
             }
 
-            if (cur.right == Scontent.complex and cur.right.complex != last) {
-                var subcur = cur.right.complex;
-                while (subcur.left == Scontent.complex) : (subcur = subcur.left.complex) {}
+            if (elem_d.* == Scontent.complex and elem_d.complex != last) {
+                var subcur = elem_d.complex;
 
-                //print("right", .{});
-                //subcur.dump();
+                while (access_dp(subcur, d.opposite()).* == Scontent.complex) {
+                    subcur = access_dp(subcur, d.opposite()).complex;
+                }
 
-                subcur.left.direct = subcur.left.direct + ep.right.direct;
-                break :flip_r;
+                var subcur_d = access_dp(subcur, d.opposite());
+                subcur_d.* = shift_u32(subcur_d.direct + ep_dv);
+                break :flip_p;
             }
+
             last = cur;
         }
     }
 
-    maybe_cur = ep;
-    last = ep;
-    if (maybe_cur.?.parent.?.left == Scontent.direct)
-        maybe_cur.?.parent.?.left.direct = maybe_cur.?.parent.?.left.direct + ep.left.direct
-    else {
-        flip_l: while (maybe_cur) |cur| : (maybe_cur = cur.parent) {
-            if (cur.left == Scontent.direct and cur != ep) {
-                //print("left - direct", .{});
-                //cur.dump();
-
-                cur.left.direct = cur.left.direct + ep.left.direct;
-                break :flip_l;
-            }
-
-            if (cur.left == Scontent.complex and cur.left.complex != last) {
-                var subcur = cur.left.complex;
-                while (subcur.right == Scontent.complex) : (subcur = subcur.right.complex) {}
-
-                //print("left", .{});
-                //subcur.dump();
-
-                subcur.right.direct = subcur.right.direct + ep.left.direct;
-                break :flip_l;
-            }
-            last = cur;
+    inline for (Directions) |d| {
+        var branch_to_zero = access_dp(ep.parent.?, d);
+        if (branch_to_zero.* == Scontent.complex and branch_to_zero.complex == ep) {
+            branch_to_zero.* = shift_u32(0);
+            break;
         }
     }
-
-    var maybe_it = ep.parent;
-    if (maybe_it.?.right == Scontent.complex and maybe_it.?.right.complex == ep)
-        maybe_it.?.right = shift_u32(0)
-    else
-        maybe_it.?.left = shift_u32(0);
 
     return true;
+}
+
+fn access_dp(s: *Snumber, d: Direction) *Scontent {
+    return switch (d) {
+        Direction.Left => &s.left,
+        Direction.Right => &s.right,
+    };
 }
 
 fn add(a: *Snumber, b: *Snumber, allocator: *std.mem.Allocator) *Snumber {
