@@ -4,8 +4,8 @@ from collections import defaultdict
 # 556 is too high
 
 def main():
-    with open("test.txt") as f:
-    # with open("real.txt") as f:
+    # with open("test.txt") as f:
+    with open("real.txt") as f:
         data = f.readlines()
 
     scanners_points = []
@@ -36,9 +36,10 @@ def main():
             acc = 0
             for k, ble in enumerate(psl):
                 for l, fuj in enumerate(psr):
-                    if sum([d in ble for d in fuj]) > 10:
+                    overlapping_d = sum([d in ble for d in fuj])
+                    if overlapping_d > 10:
                         acc += 1
-                        key,value = sorted(((i, k),(j,l)))
+                        key,value = (((i, k),(j,l)))
                         scanner, point = key
                         overlapping[scanner][point].add(value)
 
@@ -47,7 +48,9 @@ def main():
                 print(f"becon {i} overlaps with becon {j} - {acc} points")
 
     print(cumsum)
-    print(overlapping[0])
+    print(overlapping[2])
+    print(sum(sum(map(len, o.values())) for o in overlapping.values()))
+    print(list(map(len, overlapping.values())))
 
     print(sum(map(len, scanners_points)) - cumsum)
 
