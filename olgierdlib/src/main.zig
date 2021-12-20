@@ -20,3 +20,20 @@ const Point = struct {
         return self.x == other.x and self.y == other.y;
     }
 };
+
+pub fn genericPoint(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        x: T,
+        y: T,
+
+        pub fn eql(self: Self, other: Self) bool {
+            return self.x == other.x and self.y == other.y;
+        }
+
+        pub fn move(self: Self, x: T, y: T) Self {
+            return Self{ .x = self.x + x, .y = self.y + y };
+        }
+    };
+}
