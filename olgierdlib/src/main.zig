@@ -37,3 +37,21 @@ pub fn genericPoint(comptime T: type) type {
         }
     };
 }
+
+pub fn genericPoint3(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        x: T,
+        y: T,
+        z: T,
+
+        pub fn eql(self: Self, other: Self) bool {
+            return std.meta.eql(self, other);
+        }
+
+        pub fn move(self: Self, x: T, y: T) Self {
+            return Self{ .x = self.x + x, .y = self.y + y, .z = self.z + z };
+        }
+    };
+}
