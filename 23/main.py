@@ -3,11 +3,13 @@ import itertools
 import functools
 import copy
 import math
+from ptpython.repl import embed
 from collections import deque
 
 import matplotlib
 import networkx as nx
 
+HOW_MANY_ROOMS = 4
 
 def main():
     fname = sys.argv[1]
@@ -20,11 +22,11 @@ def main():
 
     for i in range(4):
         intersection = 2 * i + 2
-        new = 11 * (i + 1)
-        new_next = new + 1
-
-        _g.add_edge(intersection, new)
-        _g.add_edge(new,new_next)
+        it = intersection
+        for j in range(HOW_MANY_ROOMS):
+            new = 11 * (i + 1) + j
+            _g.add_edge(it, new)
+            it = new
 
     with open(fname) as f:
         for i, l in enumerate(filter(lambda l: any(c in l for c in {"A","B", "C"}), f.readlines())):
@@ -34,33 +36,24 @@ def main():
 
     _g.graph["moves"] = []
     _g.graph["energy"] = 0
+    _g.graph["placed"] = set()
 
-    # _graphs = [(_g, -1)]
     _graphs = deque([(_g, -1)])
     minng = _g
     minnv = math.inf
-    # minnv = 12522
+    # minnv = 45000
 
     cache = {}
 
-    g1 = copy.deepcopy(_g)
-    g2 = copy.deepcopy(_g)
-    move(g1, 22, 3)
-    move(g2, 22, 3)
-
-    # cache[dump(g1)] = 5
-    # print(cache[dump(g2)])
-
     i = 0
-    while(_graphs):
-    # for ii in range(10):
+    # while(_graphs):
+    for ii in range(10):
         # for jj in range(100):
         for jj in range(1000):
             try:
                 g, prev_gen = _graphs.pop()
             except IndexError:
                 continue
-            # g, prev_gen = _graphs.popleft()
 
             if(g.graph["energy"] >= minnv):
                 continue
@@ -72,7 +65,6 @@ def main():
                 else:
                     cache[g_dump] = g.graph["energy"]
             else:
-                # print(dump(g)._d)
                 cache[g_dump] = g.graph["energy"]
 
             if(is_done(g)):
@@ -81,7 +73,6 @@ def main():
                 print("done!", g.graph["energy"])
 
             freenodes = list(filter(lambda n: g.nodes[n]["contents"] is not None, nx.nodes(g)))
-            # print(list((f, g.nodes[f]["contents"]) for f in freenodes))
 
             for n in list(filter(functools.partial(can_move, g=g), freenodes)):
 
@@ -91,16 +82,16 @@ def main():
                     d = distance(n, p, g.nodes[n]['contents'])
                     new_g.graph["energy"] += d
                     new_g.graph["moves"].append(f"{n} -> {p}: d{d} [{g.nodes[n]['contents']}]")
-
-                    if len(new_g.graph["moves"]) > 3 and new_g.graph["moves"][-1] == new_g.graph["moves"][-3]:
-                        for m in new_g.graph["moves"]:
-                            print(m)
-
-                        nx.draw(g, with_labels=True, labels = { n: ("" if g.nodes[n]["contents"] is None else str(g.nodes[n]["contents"]) + " - ") + str(n) for n in nx.nodes(g)})
-                        matplotlib.pyplot.show()
-                        
-                        raise 
-
+                    # if n in new_g.graph["placed"]:
+                        # print(new_g.graph["moves"])
+                        # print(dump(g)._d)
+                        # raise
+                    if p > 10:
+                        new_g.graph["placed"].add(p)
+                    # if f"{p} -> {n}: d{d} [{g.nodes[n]['contents']}]" in new_g.graph["moves"]:
+                        # print(new_g.graph["moves"])
+                        # print(dump(g)._d)
+                        # raise
                     move(new_g, n, p)
                     _graphs.append((new_g, prev_gen + 1))
                 
@@ -108,10 +99,18 @@ def main():
         print(i * 1000, len(_graphs), len([gen for _, gen in _graphs if gen < 1]))
 
     print()
-    g = minng
+    try:
+        # g, _ = _graphs[-1]
+        g = minng
+    except IndexError:
+        g = minng
+
     print(minnv)
+
     for m in g.graph["moves"]:
         print(m)
+
+    print(dump(g)._d)
     # nx.draw(g, with_labels=True, labels = { n: ("" if g.nodes[n]["contents"] is None else str(g.nodes[n]["contents"]) + " - ") + str(n) for n in nx.nodes(g)})
     # matplotlib.pyplot.show()
 
@@ -156,15 +155,14 @@ def possible_places(sn, g) -> list:
 
     while(q):
         cn = q.pop()
-        for n in g[cn]:
-            if n in visited:
+        for i in g[cn]:
+            if i in visited:
                 continue
 
-            visited.add(n)
-
-            if is_free(n, g):
-                possible.add(n)
-                q.append(n)
+            visited.add(i)
+            if is_free(i, g):
+                possible.add(i)
+                q.append(i)
 
     r11set = set(range(11))
     no_hall_stall = possible.difference(set(range(2,9,2)))
@@ -188,17 +186,44 @@ def possible_places(sn, g) -> list:
     desired_pos = ord(c) - ord("A")
     target_idx = 11 * (desired_pos + 1)
 
-    if target_idx in betterer and target_idx + 1 in betterer:
-        betterer.remove(target_idx)
 
-    if target_idx in betterer and g.nodes[target_idx + 1]["contents"] != c:
-        betterer.remove(target_idx)
+    offset = sn // 11
+
+    # can only place item at bottom column
+    for i in range(HOW_MANY_ROOMS - 1):
+        if target_idx + i in betterer and target_idx + i + 1 in betterer:
+            betterer.discard(target_idx + i)
+            assert len(betterer) > 0
+
+
+    # cannot place item in column if there is something to take out
+    for i in range(HOW_MANY_ROOMS):
+        if g.nodes[target_idx + i]["contents"] not in {c, None}:
+            for i in range(HOW_MANY_ROOMS):
+                betterer.discard(target_idx + i)
+
+    # cmp_d = {0: None, 1: 'C', 2: None, 3: 'C', 4: None, 5: "B", 6: None, 7: 'C', 8: None, 9: 'A', 10: 'D', 11: 'B', 12: 'D', 13: 'D', 14: 'A', 22: None, 23: None, 24: 'B', 25: 'D', 33: None, 34: 'B', 35: 'A', 36: 'C', 44: None, 45: None, 46: None, 47: 'A'}
+    # if sn == 5 and dump(g) == cmp_d:
+        # embed(globals(), locals())
+        # raise
+
+    # cannot go from column to column
+    if sn > 10:
+        for i in range(HOW_MANY_ROOMS):
+            betterer.discard(target_idx + i)
+
+
+        # nx.draw(g, with_labels=True, labels = { n: ("" if g.nodes[n]["contents"] is None else str(g.nodes[n]["contents"]) + " - ") + str(n) for n in nx.nodes(g)})
+        # matplotlib.pyplot.show()
+
+        # embed(globals(), locals())
+        # raise
 
     return list(betterer)
 
 def is_done(g, ble=False):
     for i in range(4):
-        for j in range(2):
+        for j in range(HOW_MANY_ROOMS):
             n = 11 * (i + 1) + j
             if (ble):
                 print(n)
@@ -210,11 +235,22 @@ def is_done(g, ble=False):
 
 
 def can_move(n, g) -> bool:
-    if (n % 11 == 0) and (n > 10):
-        return not (is_in_desired_spot(n, g) and is_in_desired_spot(n + 1, g))
+    if(n > 10):
+        offset = n // 11
+        rel_idx = n % 11
 
-    elif (n % 11 == 1) and (n > 10):
-        return (not is_in_desired_spot(n, g)) and is_free(n - 1, g)
+        for i in range(1, rel_idx):
+            assert i != 0
+            real_idx = 11 * (offset) + i
+            if not is_free(real_idx, g):
+                return False
+
+        for i in range(rel_idx, HOW_MANY_ROOMS):
+            real_idx = 11 * (offset) + i
+            if not is_in_desired_spot(real_idx, g):
+                return True
+
+        return False
 
     else: # 0..10
         c = g.nodes[n]["contents"]
