@@ -11,6 +11,8 @@ let
   pythonPkgs = python-packages: with python-packages; [
       pudb
       ptpython
+      networkx
+      matplotlib
     ]; 
   myPython = pythonCore.withPackages pythonPkgs;
 in
@@ -20,4 +22,4 @@ pkgs.mkShell {
     zls
     myPython
   ];
-}
+  }
