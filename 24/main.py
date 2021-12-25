@@ -14,6 +14,7 @@ def main():
 
     # setup
     inputs = [sp.symbols(f"in{s}") for s in range(1,14 + 1)]
+    # inputs = [3,2,2,7,5]
     iter_inputs = iter(inputs)
     vars = {
         "w": 0,
@@ -22,11 +23,9 @@ def main():
         "z": 0,
     }
 
-    x, y = sp.symbols("x y")
-
-    # blorg = (x + 209)/13
-    # print(simplify_floordiv(blorg))
-    # exit(0)
+    # x, y = sp.symbols("x y")
+    # blorg = (13 * x)/13
+    # print(blorg)
 
     with open(fname) as f:
         for idx, l in enumerate(f.readlines()):
@@ -54,7 +53,8 @@ def main():
                 if (arg1 == 1):
                     continue    
                 # TODO: wtf mod is so slow?
-                # TODO: fix!!!
+                # TODO: simplify mod - symbol * powers of arg1 can be safely deleted
+                # TODO: mod which is symbol + i (i < 17, i > -27) can be dropped
                 # try:
                     # if arg1 == 26 and 0 == sp.simplify(vars[arg0] -(inputs[0] + 1)):
                         # continue
@@ -69,8 +69,17 @@ def main():
             elif op == "eql":
                 lhs = vars[arg0]
                 rhs = arg1
+                result = Branch(lhs=lhs, rhs=rhs, if_false=0, if_true=1)
 
-                if isinstance(vars[arg0], Branch) and isinstance(arg1, int):
+                if isinstance(lhs, int) and isinstance(rhs, int):
+                    result =  1 if lhs == rhs else 0
+                elif isinstance(rhs, sp.Symbol) and isinstance(lhs, sp.Expr):
+                    free_symbol = has_int_term(lhs)
+                    print("AAAAAA")
+                    if free_symbol and free_symbol >= 10:
+                        print(lhs, rhs)
+                        result = 0
+                elif isinstance(vars[arg0], Branch) and isinstance(arg1, int):
                     if arg1 > 1 or arg1 < 0:
                         # TODO: bullshit
                         result = 0
@@ -82,7 +91,6 @@ def main():
                         assert 0, "unreachable"
                 else:
                     print("branch!")
-                    result = Branch(lhs=lhs, rhs=rhs, if_false=0, if_true=1)
 
                     try:
                         print("a")
@@ -110,6 +118,7 @@ def main():
             b.append(cur.if_false)
             b.append(cur.if_true)
         else:
+            # print(cur)
             if (not has_int_term(cur)):
                 if (as_int(cur) == 0):
                     zeros += 1
@@ -120,7 +129,7 @@ def main():
 def has_int_term(expr):
     for arg in expr.args:
         if arg.is_integer:
-            return True
+            return as_int(arg)
 
     return False
 
@@ -167,6 +176,9 @@ def simplify_floordiv(expr):
     if isinstance(expr, Branch):
         return expr.process1(simplify_floordiv)
 
+    if isinstance(expr, int):
+        return expr
+
     f = expr.func
     args = []
 
@@ -177,10 +189,6 @@ def simplify_floordiv(expr):
         a, b = expr.args
         if isinstance(a, sp.Symbol): 
             i = b
-            if i < 1/9:
-                return 0
-        if isinstance(b, sp.Symbol): 
-            i = a
             if i < 1/9:
                 return 0
 
