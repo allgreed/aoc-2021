@@ -13,6 +13,7 @@ let
       ptpython
       networkx
       matplotlib
+      sympy
     ]; 
   myPython = pythonCore.withPackages pythonPkgs;
 in
