@@ -4,6 +4,7 @@ import itertools
 from dataclasses import dataclass
 
 import sympy as sp
+from sympy.core.compatibility import as_int
 
 
 THE_RANGE = set(range(1, 9 + 1))
@@ -21,6 +22,12 @@ def main():
         "z": 0,
     }
 
+    x, y = sp.symbols("x y")
+
+    # blorg = (x + 209)/13
+    # print(simplify_floordiv(blorg))
+    # exit(0)
+
     with open(fname) as f:
         for idx, l in enumerate(f.readlines()):
             print(idx + 1)
@@ -29,6 +36,7 @@ def main():
                 continue
             parsed = l.split()
             op, arg0, *rest = parsed
+
             if rest:
                 arg1 = rest[0]
                 try:
@@ -43,19 +51,21 @@ def main():
             elif op == "add":
                 vars[arg0] = arg1 + vars[arg0]
             elif op == "mod":
+                if (arg1 == 1):
+                    continue    
                 # TODO: wtf mod is so slow?
                 # TODO: fix!!!
-                try:
-                    if arg1 == 26 and 0 == sp.simplify(vars[arg0] -(inputs[0] + 1)):
-                        continue
-                except TypeError:
-                    pass
+                # try:
+                    # if arg1 == 26 and 0 == sp.simplify(vars[arg0] -(inputs[0] + 1)):
+                        # continue
+                # except TypeError:
+                    # pass
                 vars[arg0] %= arg1
             elif op == "div":
                 # TODO: truncate towards 0
                 if (arg1 == 1):
                     continue    
-                vars[arg0] //= arg1
+                vars[arg0] = simplify_floordiv(vars[arg0] // arg1)
             elif op == "eql":
                 lhs = vars[arg0]
                 rhs = arg1
@@ -90,7 +100,29 @@ def main():
             else:
                 assert 0, "unreachable"
 
-    print(vars)
+    # print(vars)
+    print("------")
+    b = [vars["z"]]
+    zeros = 0
+    while(b):
+        cur = b.pop()
+        if isinstance(cur, Branch):
+            b.append(cur.if_false)
+            b.append(cur.if_true)
+        else:
+            if (not has_int_term(cur)):
+                if (as_int(cur) == 0):
+                    zeros += 1
+
+    print("zero solutions", zeros)
+
+
+def has_int_term(expr):
+    for arg in expr.args:
+        if arg.is_integer:
+            return True
+
+    return False
 
 @dataclass
 class Branch:
@@ -101,6 +133,9 @@ class Branch:
 
     def process(a,b,op):
         return Branch(lhs=a.lhs, rhs=a.rhs, if_false=op(a.if_false,b), if_true=op(a.if_true, b))
+
+    def process1(a,op):
+        return Branch(lhs=a.lhs, rhs=a.rhs, if_false=op(a.if_false), if_true=op(a.if_true))
 
     def __mul__(self,b):
         if b == 0:
@@ -127,14 +162,56 @@ class Branch:
         return self.process(b, operator.floordiv)
 
 
+def simplify_floordiv(expr):
+    # print(expr, type(expr))
+    if isinstance(expr, Branch):
+        return expr.process1(simplify_floordiv)
+
+    f = expr.func
+    args = []
+
+    if f == sp.floor:
+        return simplify_floordiv(expr.args[0])
+
+    if f == sp.Mul and len(expr.args) == 2:
+        a, b = expr.args
+        if isinstance(a, sp.Symbol): 
+            i = b
+            if i < 1/9:
+                return 0
+        if isinstance(b, sp.Symbol): 
+            i = a
+            if i < 1/9:
+                return 0
+
+    if f == sp.Add:
+        for arg in expr.args:
+            args.append(simplify_floordiv(arg))
+    elif expr.is_rational:
+        return int(expr.p / expr.q)
+    else:
+        for arg in expr.args:
+            if arg.func == sp.floor:
+                args.append(arg.args[0])
+            else:
+                args.append(arg)
+            # else:
+                # assert 0, "unreachable"
+
+    try:
+        return f(*args)
+    except TypeError:
+        return expr
+
+
 def solve_discreet(equation):
-    print(equation)
+    # print(equation)
     if isinstance(equation, int):
         return set()
 
     varaibles = list(sorted((equation.free_symbols), key=lambda s: str(s)))
 
-    if(len(varaibles) > 3):
+    if(len(varaibles) > 2):
         return set()
 
     solutions = set()
