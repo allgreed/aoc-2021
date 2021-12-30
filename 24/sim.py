@@ -13,8 +13,8 @@ def main():
     fname = sys.argv[1]
 
     # setup
-    inputs = [sp.symbols(f"in{s}") for s in range(1,14 + 1)]
-    # inputs = [3,2,2,7,5]
+    # inputs = [sp.symbols(f"in{s}") for s in range(1,14 + 1)]
+    inputs = [9,9,3,1,1,1,9,1,5,1,6,1,5,6]
     iter_inputs = iter(inputs)
     vars = {
         "w": 0,
@@ -23,13 +23,9 @@ def main():
         "z": 0,
     }
 
-    # x, y = sp.symbols("x y")
-    # blorg = (13 * x)/13
-    # print(blorg)
-
     with open(fname) as f:
         for idx, l in enumerate(f.readlines()):
-            print(idx + 1)
+            # print(idx + 1)
             l = l.rstrip()
             if l.startswith("#"):
                 continue
@@ -45,26 +41,15 @@ def main():
 
             if op == "inp":
                 vars[arg0] = next(iter_inputs)
+            elif op == "dump":
+                print(vars)
             elif op == "mul":
                 vars[arg0] *= arg1
             elif op == "add":
                 vars[arg0] = arg1 + vars[arg0]
             elif op == "mod":
-                if (arg1 == 1):
-                    continue    
-                # TODO: wtf mod is so slow?
-                # TODO: simplify mod - symbol * powers of arg1 can be safely deleted
-                # TODO: mod which is symbol + i (i < 17, i > -27) can be dropped
-                # try:
-                    # if arg1 == 26 and 0 == sp.simplify(vars[arg0] -(inputs[0] + 1)):
-                        # continue
-                # except TypeError:
-                    # pass
                 vars[arg0] %= arg1
             elif op == "div":
-                # TODO: truncate towards 0
-                if (arg1 == 1):
-                    continue    
                 vars[arg0] = simplify_floordiv(vars[arg0] // arg1)
             elif op == "eql":
                 lhs = vars[arg0]
@@ -108,22 +93,7 @@ def main():
             else:
                 assert 0, "unreachable"
 
-    print(vars)
-    # print("------")
-    # b = [vars["z"]]
-    # zeros = 0
-    # while(b):
-        # cur = b.pop()
-        # if isinstance(cur, Branch):
-            # b.append(cur.if_false)
-            # b.append(cur.if_true)
-        # else:
-            # # print(cur)
-            # if (not has_int_term(cur)):
-                # if (as_int(cur) == 0):
-                    # zeros += 1
-
-    # print("zero solutions", zeros)
+    print(vars["z"])
 
 
 def has_int_term(expr):
