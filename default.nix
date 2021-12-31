@@ -21,7 +21,7 @@ in
 pkgs.mkShell {
   buildInputs = with pkgs; [
     zig
-    zls
+    #zls
     myPython
   ];
   }
