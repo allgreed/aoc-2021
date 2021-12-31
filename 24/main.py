@@ -110,18 +110,20 @@ def main():
 
     print(vars)
     # print("------")
-    # b = [vars["z"]]
+    b = [vars["z"]]
     # zeros = 0
-    # while(b):
-        # cur = b.pop()
-        # if isinstance(cur, Branch):
-            # b.append(cur.if_false)
-            # b.append(cur.if_true)
-        # else:
-            # # print(cur)
-            # if (not has_int_term(cur)):
-                # if (as_int(cur) == 0):
-                    # zeros += 1
+    solutions = set()
+    while(b):
+        cur = b.pop()
+        if isinstance(cur, Branch):
+            b.append(cur.if_false)
+            b.append(cur.if_true)
+        else:
+            if cur not in solutions:
+                solutions.add(cur)
+
+    print(len(solutions))
+    print(solutions)
 
     # print("zero solutions", zeros)
 
