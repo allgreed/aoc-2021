@@ -14,6 +14,7 @@ let
       networkx
       matplotlib
       sympy
+      scipy
       z3
     ]; 
   myPython = pythonCore.withPackages pythonPkgs;

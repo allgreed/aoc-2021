@@ -1,19 +1,15 @@
 import sys
-import itertools
 import functools
-import copy
-import math
-from ptpython.repl import embed
-from collections import deque
+import itertools
+import heapq
+import time
+from collections import defaultdict
 
 import matplotlib
 import networkx as nx
 
-HOW_MANY_ROOMS = 4
-
-def main():
-    fname = sys.argv[1]
-
+ROOMS = 4
+def mk_structure_graph():
     _g = nx.Graph()
     for i in range(11):
         _g.add_node(i, contents=None)
@@ -23,290 +19,307 @@ def main():
     for i in range(4):
         intersection = 2 * i + 2
         it = intersection
-        for j in range(HOW_MANY_ROOMS):
+        for j in range(ROOMS):
             new = 11 * (i + 1) + j
             _g.add_edge(it, new)
             it = new
 
+    return _g
+G = mk_structure_graph()
+
+SOL = [
+# ".......BDDACCBDBBACDACA",
+"......DBDDACCBDBBAC.ACA",
+"A.....DBDDACCBDBBAC..CA",
+"A....BDBDDACCBD.BAC..CA",
+"A...BBDBDDACCBD..AC..CA",
+"AA..BBDBDDACCBD...C..CA",
+"AA..BBDBDDA.CBD..CC..CA",
+"AA..BBDBDDA..BD.CCC..CA",
+"AA.BBBDBDDA...D.CCC..CA",
+"AADBBBDBDDA.....CCC..CA",
+"AAD.BBDBDDA...B.CCC..CA",
+"AAD..BDBDDA..BB.CCC..CA",
+"AAD...DBDDA.BBB.CCC..CA",
+"AAD...DBDDA.BBBCCCC...A",
+"AAD..ADBDDA.BBBCCCC....",
+"AA...ADBDDA.BBBCCCC...D",
+"AA...AD.DDABBBBCCCC...D",
+"AA...AD..DABBBBCCCC..DD",
+"AAD..AD...ABBBBCCCC..DD",
+"A.D..AD..AABBBBCCCC..DD",
+"..D..AD.AAABBBBCCCC..DD",
+".....AD.AAABBBBCCCC.DDD",
+"......DAAAABBBBCCCC.DDD",
+]
+
+def main():
+    start_time = time.time()
+    fname = sys.argv[1]
     with open(fname) as f:
+        initial_state = { n: None for n in range(11) if n not in {2,4,6,8}}
         for i, l in enumerate(filter(lambda l: any(c in l for c in {"A","B", "C"}), f.readlines())):
             l = l.replace("#", "").strip()
             for j, c in enumerate(l):
-                _g.nodes[11 * (j + 1) + i]["contents"] = c
+                initial_state[11 * (j + 1) + i] = c
 
-    _g.graph["moves"] = []
-    _g.graph["energy"] = 0
-    _g.graph["placed"] = set()
-
-    _graphs = deque([(_g, -1)])
-    minng = _g
-    minnv = math.inf
-    # minnv = 45000
-
+    inistail_h = hscore(initial_state)
+    heap = []
+    heapq.heappush(heap, (inistail_h, inistail_h, 0, 0, initial_state, []))
     cache = {}
-
-    i = 0
-    # while(_graphs):
-    for ii in range(10):
-        # for jj in range(100):
-        for jj in range(1000):
-            try:
-                g, prev_gen = _graphs.pop()
-            except IndexError:
-                continue
-
-            if(g.graph["energy"] >= minnv):
-                continue
-
-            g_dump = dump(g)
-            if(g_dump in cache):
-                if cache[g_dump] <= g.graph["energy"]:
-                    continue
-                else:
-                    cache[g_dump] = g.graph["energy"]
-            else:
-                cache[g_dump] = g.graph["energy"]
-
-            if(is_done(g)):
-                minng = g
-                minnv = g.graph["energy"]
-                print("done!", g.graph["energy"])
-
-            freenodes = list(filter(lambda n: g.nodes[n]["contents"] is not None, nx.nodes(g)))
-
-            for n in list(filter(functools.partial(can_move, g=g), freenodes)):
-
-                for p in possible_places(n, g):
-
-                    new_g = copy.deepcopy(g)
-                    d = distance(n, p, g.nodes[n]['contents'])
-                    new_g.graph["energy"] += d
-                    new_g.graph["moves"].append(f"{n} -> {p}: d{d} [{g.nodes[n]['contents']}]")
-                    # if n in new_g.graph["placed"]:
-                        # print(new_g.graph["moves"])
-                        # print(dump(g)._d)
-                        # raise
-                    if p > 10:
-                        new_g.graph["placed"].add(p)
-                    # if f"{p} -> {n}: d{d} [{g.nodes[n]['contents']}]" in new_g.graph["moves"]:
-                        # print(new_g.graph["moves"])
-                        # print(dump(g)._d)
-                        # raise
-                    move(new_g, n, p)
-                    _graphs.append((new_g, prev_gen + 1))
-                
-        i += 1
-        print(i * 1000, len(_graphs), len([gen for _, gen in _graphs if gen < 1]))
-
-    print()
-    try:
-        # g, _ = _graphs[-1]
-        g = minng
-    except IndexError:
-        g = minng
-
-    print(minnv)
-
-    for m in g.graph["moves"]:
-        print(m)
-
-    print(dump(g)._d)
-    # nx.draw(g, with_labels=True, labels = { n: ("" if g.nodes[n]["contents"] is None else str(g.nodes[n]["contents"]) + " - ") + str(n) for n in nx.nodes(g)})
-    # matplotlib.pyplot.show()
-
-
-def distance(n, p, c):
-    a,b = sorted([n, p])
-    d = 0
-
-    if b > 10:
-        i = b // 11 - 1
-        intersection = 2 * i + 2
-        d +=1 + b % 11
-    else:
-        raise
-
-    if a > 10:
-        i = a // 11 - 1
-        d +=1 + a % 11
-        a = 2 * i + 2
-
-    d += abs(intersection - a)
-
-    char_mod = ord(c) - ord("A")
-    d *= 10 ** char_mod
-    return d
-
-assert(distance(33,0,"A") == 7)
-assert(distance(11,44,"D") == 8000)
-assert(distance(12,33,"C") == 700)
-
-def move(g, n, p):
-    c = g.nodes[n]["contents"]
-    g.nodes[n]["contents"] = None
-    assert g.nodes[p]["contents"] is None
-    g.nodes[p]["contents"] = c
-
-def possible_places(sn, g) -> list:
-    visited = set()
-    possible = set()
-    q = [sn]
-    c = g.nodes[sn]["contents"]
-
-    while(q):
-        cn = q.pop()
-        for i in g[cn]:
-            if i in visited:
-                continue
-
-            visited.add(i)
-            if is_free(i, g):
-                possible.add(i)
-                q.append(i)
-
-    r11set = set(range(11))
-    no_hall_stall = possible.difference(set(range(2,9,2)))
-
-    thats_my_spot = set()
-    for pp in no_hall_stall:
-        if pp not in r11set and not is_in_desired_spot(pp, g, c):
-            thats_my_spot.add(pp)
-
-
-    better = no_hall_stall.difference(thats_my_spot)
-
-    no_hall_move = set()
-    if sn in r11set:
-        for pp in better:
-            if pp in r11set: 
-                no_hall_move.add(pp)
-
-    betterer = better.difference(no_hall_move)
-
-    desired_pos = ord(c) - ord("A")
-    target_idx = 11 * (desired_pos + 1)
-
-
-    offset = sn // 11
-
-    # can only place item at bottom column
-    for i in range(HOW_MANY_ROOMS - 1):
-        if target_idx + i in betterer and target_idx + i + 1 in betterer:
-            betterer.discard(target_idx + i)
-            assert len(betterer) > 0
-
-
-    # cannot place item in column if there is something to take out
-    for i in range(HOW_MANY_ROOMS):
-        if g.nodes[target_idx + i]["contents"] not in {c, None}:
-            for i in range(HOW_MANY_ROOMS):
-                betterer.discard(target_idx + i)
-
-    # cmp_d = {0: None, 1: 'C', 2: None, 3: 'C', 4: None, 5: "B", 6: None, 7: 'C', 8: None, 9: 'A', 10: 'D', 11: 'B', 12: 'D', 13: 'D', 14: 'A', 22: None, 23: None, 24: 'B', 25: 'D', 33: None, 34: 'B', 35: 'A', 36: 'C', 44: None, 45: None, 46: None, 47: 'A'}
-    # if sn == 5 and dump(g) == cmp_d:
-        # embed(globals(), locals())
-        # raise
-
-    # cannot go from column to column
-    if sn > 10:
-        for i in range(HOW_MANY_ROOMS):
-            betterer.discard(target_idx + i)
-
-
-        # nx.draw(g, with_labels=True, labels = { n: ("" if g.nodes[n]["contents"] is None else str(g.nodes[n]["contents"]) + " - ") + str(n) for n in nx.nodes(g)})
-        # matplotlib.pyplot.show()
-
-        # embed(globals(), locals())
-        # raise
-
-    return list(betterer)
-
-def is_done(g, ble=False):
-    for i in range(4):
-        for j in range(HOW_MANY_ROOMS):
-            n = 11 * (i + 1) + j
-            if (ble):
-                print(n)
+    cache_hits = 0
     
-            if g.nodes[n]["contents"] is None or not is_in_desired_spot(n, g):
-                return False
+    last = None
+    for _ in range(400000):
+        try:
+            elem = heapq.heappop(heap)
+            last = elem
+        except IndexError:
+            pass
+
+        f, h, g, _, state, moves = elem
+
+        if h == 0:
+            print("A!", new_f, new_state)
+            print(moves)
+            exit(0)
+
+        state_repr = hash_dict(state)
+        if state_repr in cache and cache[state_repr] <= f:
+            cache_hits += 1
+            continue
+        cache[state_repr] = f
+
+        am = available_moves(state)
+
+        if state_repr in SOL:
+            idx = SOL.index(state_repr)
+            print("found sol", idx, f)
+
+        for m in am:
+            new_state = state.copy()
+            mv = move(new_state, *m)
+
+            new_h = hscore(new_state)
+            new_g = mv + g
+            new_f = new_h + new_g
+
+            state_repr = hash_dict(new_state)
+            if state_repr in cache and cache[state_repr] <= new_f:
+                cache_hits += 1
+                continue
+
+            heapq.heappush(heap, (new_f, new_h, new_g, Choicer(), new_state, moves.copy() + [m]))
+
+    print(len(heap))
+    print(len(cache))
+    print(cache_hits)
+    elem = last
+    print(elem)
+
+    print("done", time.time() - start_time)
+    plot(elem[4])
+
+
+@functools.total_ordering
+class Choicer:
+    def __eq__(self, other):
+        return False
+    def __lt__(self, other):
+        return False
+
+
+def hash_dict(d):
+    # return tuple(sorted(d.items()))
+    return "".join(map(lambda x: "." if x[1] is None else x[1], tuple(sorted(d.items()))))
+
+
+def is_done(state):
+    # TODO: do
+    return False
+
+
+def hscore(state, debug=False):
+    isk = list(state.keys())
+    stack_positions = isk[7:]
+
+    hscore = 0
+    for n in state.keys():
+        if is_free(state,n):
+            continue
+
+        dsi = desired_stack_idx(state, n)
+        if n < 11 or desired_stack_idx(state, n) != stack_idx(n):
+            despos = dsi * 11 + 3
+            d = distance(n, despos)
+            d *= valuate(state[n])
+            hscore += d
+
+    if hscore > 0:
+        hscore += 10000
+    
+    return hscore
+
+def available_moves(state):
+    isk = list(state.keys())
+    hall_postions = isk[:7]
+    stack_positions = isk[7:]
+    is_movable_f = functools.partial(movable, state)
+
+    # heuristic: if I can put something in the stack I do that
+    for n, moves in zip(hall_postions, map(is_movable_f, hall_postions)):
+        if moves:
+            assert len(moves) == 1
+            return [(n, next(iter(moves)))]
+
+    move_templates = filter(lambda x: x[1], zip(stack_positions, map(is_movable_f, stack_positions)))
+    return sum(map(lambda mt: list(itertools.product([mt[0]], mt[1])), move_templates), [])
+
+
+def movable(state, n):
+    if state[n] is None:
+        return []
+
+    dsi = desired_stack_idx(state, n)
+    reachable_positions = reachable(state, n)
+    if n < 11: # hall logic
+        if (is_well_formed(state, dsi)):
+            is_top_f = functools.partial(is_stack_top, state)
+            is_free_f = functools.partial(is_free, state)
+            try:
+                top = next(filter(is_top_f, stack_coords(dsi)))
+                result = next(filter(is_free_f, get_neighbours(top)))
+            except StopIteration:
+                result = max(stack_coords(dsi))
+            assert result > 10, "the stack cannot be full if there is a desired element in the hall"
+            return {result}.intersection(reachable_positions)
+        else:
+            return [] 
+    else: # stack logic
+        si = stack_idx(n)
+        if is_stack_top(state, n) and (dsi == si or not is_well_formed(state, si)):
+            return list({0,1,3,5,7,9,10}.intersection(reachable_positions))
+        else:
+            return []
+
+
+def reachable(state, a):
+    visited = set()
+    avaiable = set()
+    stack = [a]
+    while stack:
+        v = stack.pop()
+        for n in get_neighbours(v):
+            if n not in visited:
+                visited.add(n)
+                if is_free(state,n):
+                    stack.append(n)
+                    avaiable.add(n)
+
+    return avaiable
+
+
+def desired_stack_idx(state, n):
+    assert state[n] is not None, f"{n}"
+    return ord(state[n]) - ord("A") + 1
+
+
+def stack_coords(stack_idx):
+    return (11 * stack_idx + i for i in range(4))
+
+
+def is_well_formed(state, stack_idx):
+    dsi = functools.partial(desired_stack_idx, state)
+    free = functools.partial(is_free, state)
+    dsi_or_empty = lambda n: free(n) or dsi(n) == stack_idx
+
+    return all(map(dsi_or_empty, stack_coords(stack_idx)))
+
+
+def stack_idx(n):
+    assert n > 10
+    return n // 11
+
+def is_stack_top(state, n):
+    if n < 11:
+        return False
+    if state[n] is None:
+        return False
+
+    stack_cords = [11 * stack_idx(n) + i for i in range(4)]
+
+    for c in stack_cords:
+        if c == n:
+            break
+        if state[c] is not None:
+            return False
 
     return True
 
 
-def can_move(n, g) -> bool:
-    if(n > 10):
-        offset = n // 11
-        rel_idx = n % 11
+def move(state, n, new_n):
+    assert is_free(state, new_n)
+    state[n], state[new_n] =  state[new_n], state[n]
 
-        for i in range(1, rel_idx):
-            assert i != 0
-            real_idx = 11 * (offset) + i
-            if not is_free(real_idx, g):
-                return False
+    d = distance(n, new_n)
+    d *= valuate(state[new_n])
 
-        for i in range(rel_idx, HOW_MANY_ROOMS):
-            real_idx = 11 * (offset) + i
-            if not is_in_desired_spot(real_idx, g):
-                return True
+    return d
 
-        return False
-
-    else: # 0..10
-        c = g.nodes[n]["contents"]
-        return any(map(functools.partial(is_in_desired_spot, g = g, c = c), possible_places(n, g)))
-
-    assert 0 # unreachable
+def valuate(c):
+    return 10 ** (ord(c) - ord("A"))
 
 
-def is_free(n, g):
-    c = g.nodes[n]["contents"]
-    return c is None
+@functools.lru_cache(maxsize=None)
+def distance(a, b):
+    visited = {a}
+    stack = [(a, 0)]
+    while stack:
+        v, dist = stack.pop()
+        if v == b:
+            return dist
 
-def is_in_desired_spot(n, g, c = None):
-    idx = n // 11 - 1
-    c = c or g.nodes[n]["contents"]
-    if c is None:
-        return False
-    desired_pos = ord(c) - ord("A")
-    return idx == desired_pos
+        for n in get_neighbours(v):
+            if n not in visited:
+                visited.add(n)
+                stack.append((n, dist +1))
+
+    assert 0, "unreachable"
 
 
-def dump(g) -> dict:
-    return FrozenDict({n: g.nodes[n]["contents"] for n in g.nodes()})
+def get_neighbours(n):
+    return G[n].keys()
 
 
-# https://stackoverflow.com/a/2704866
-import collections
+def plot(state):
+    color_map = []
+    for n in G:
+        try:
+            if state[n] is None:
+                color_map.append("white")
+            elif state[n] == "A":
+                color_map.append("yellow")
+            elif state[n] == "B":
+                color_map.append("brown")
+            elif state[n] == "C":
+                color_map.append("orange")
+            elif state[n] == "D":
+                color_map.append("purple")
+            else:
+                assert 0, f"unreachable {state[n]}"
+        except KeyError:
+            color_map.append("white")
 
-class FrozenDict(collections.Mapping):
-    """Don't forget the docstrings!!"""
+    labels = { n: str(n) + ("[T]" if is_stack_top(state,n) else "") for n in nx.nodes(G)}
+    nx.draw_kamada_kawai(G, with_labels=True, labels=labels, node_color=color_map)
+    matplotlib.pyplot.show()
 
-    def __init__(self, *args, **kwargs):
-        self._d = dict(*args, **kwargs)
-        self._hash = None
 
-    def __iter__(self):
-        return iter(self._d)
-
-    def __len__(self):
-        return len(self._d)
-
-    def __getitem__(self, key):
-        return self._d[key]
-
-    def __hash__(self):
-        # It would have been simpler and maybe more obvious to 
-        # use hash(tuple(sorted(self._d.iteritems()))) from this discussion
-        # so far, but this solution is O(n). I don't know what kind of 
-        # n we are going to run into, but sometimes it's hard to resist the 
-        # urge to optimize when it will gain improved algorithmic performance.
-        if self._hash is None:
-            hash_ = 0
-            for pair in self.items():
-                hash_ ^= hash(pair)
-            self._hash = hash_
-        return self._hash
+def is_free(state, x):
+    try:
+        return state[x] is None
+    except KeyError:
+        return True
 
 if __name__ == "__main__":
     main()
