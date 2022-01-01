@@ -15,8 +15,8 @@ watch:
 build: setup ## create artifact
 	zig build
 
-test: setup ## run all tests
-	@echo "Not implemented"; false
+test: setup src/main.zig ## run all tests
+	zig test src/main.zig	
 
 solve:
 	make --no-print-directory run INPUT=inputs/real.txt

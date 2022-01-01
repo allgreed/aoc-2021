@@ -4,7 +4,7 @@ const og = @import("olgierdlib");
 
 const print = std.log.info;
 const range = og.range;
-const Point = og.genericPoint3d(i32);
+const Point = genericPoint3d(i32);
 
 pub fn main() anyerror!void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -26,16 +26,17 @@ pub fn main() anyerror!void {
     var in_stream = file.reader();
 
     const reactor_size = 50;
-    const reactor_real_size = 2 * reactor_size + 1;
 
-    var reactor: [reactor_real_size][reactor_real_size][reactor_real_size]bool = undefined;
-    for (range(reactor_real_size)) |_, i| {
-        for (range(reactor_real_size)) |_, j| {
-            for (range(reactor_real_size)) |_, k| {
-                reactor[i][j][k] = false;
-            }
-        }
-    }
+    const c1 = Cuboid{ .start = Point{ .x = 0, .y = 0, .z = 0 }, .end = Point{ .x = 10, .y = 10, .z = 10 }, .state = CuboidState.On };
+    const c2 = Cuboid{ .start = Point{ .x = 3, .y = 3, .z = 3 }, .end = Point{ .x = 8, .y = 8, .z = 8 }, .state = CuboidState.Off };
+
+    var buff = std.ArrayList(Cuboid).init(allocator);
+    print("{s}", .{c1.split(c2, buff).items});
+    if (1 == 1)
+        return;
+
+    var cubes = std.ArrayList(Cuboid).init(allocator);
+    try cubes.append(Cuboid{ .start = Point{ .x = -reactor_size, .y = -reactor_size, .z = -reactor_size }, .end = Point{ .x = reactor_size, .y = reactor_size, .z = reactor_size }, .state = CuboidState.On });
 
     {
         per_line: while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
@@ -54,40 +55,92 @@ pub fn main() anyerror!void {
                 for (range(2)) |_, j| {
                     const v = try std.fmt.parseInt(i32, range_splitter.next().?, 10);
 
-                    if (v < -reactor_size or v > reactor_size)
+                    if (v < -reactor_size or v > reactor_size) {
+                        //print("Skipping!", .{});
                         continue :per_line;
+                    }
 
                     coords[i][j] = v;
                 }
             }
 
-            const flip_value: bool = if (raw_flip[1] == 'n') true else false;
+            const c_state = if (raw_flip[1] == 'n') CuboidState.On else CuboidState.Off;
+            const cuboid = Cuboid{ .state = c_state, .start = Point{
+                .x = coords[0][0],
+                .y = coords[1][0],
+                .z = coords[2][0],
+            }, .end = Point{
+                .x = coords[0][1],
+                .y = coords[1][1],
+                .z = coords[2][1],
+            } };
 
             // processing
-            print("{d}, {s}", .{ coords, flip_value });
+            print("{d}", .{cuboid});
 
-            var i: i32 = coords[0][0];
-            while (i <= coords[0][1]) : (i += 1) {
-                var j: i32 = coords[1][0];
-                while (j <= coords[1][1]) : (j += 1) {
-                    var k: i32 = coords[2][0];
-                    while (k <= coords[2][1]) : (k += 1) {
-                        reactor[@intCast(usize, i + reactor_size)][@intCast(usize, j + reactor_size)][@intCast(usize, k + reactor_size)] = flip_value;
-                    }
-                }
+            for (cubes.items) |cube_c| {
+                print("{d} {d}", .{ cuboid.intersect(cube_c), cuboid.state == cube_c.state });
             }
+            try cubes.append(cuboid);
         }
     }
 
     var cumsum: u64 = 0;
-    for (range(reactor_real_size)) |_, i| {
-        for (range(reactor_real_size)) |_, j| {
-            for (range(reactor_real_size)) |_, k| {
-                if (reactor[i][j][k])
-                    cumsum += 1;
-            }
-        }
-    }
 
     print("{d}", .{cumsum});
+}
+
+const CuboidState = enum {
+    On,
+    Off,
+};
+
+const Cuboid = struct {
+    start: Point,
+    end: Point,
+    state: CuboidState,
+
+    fn intersect(self: Cuboid, other: Cuboid) bool {
+        return (self.end.x >= other.start.x) and
+            (self.start.x <= other.end.x) and
+            (self.end.y >= other.start.y) and
+            (self.start.y <= other.end.y) and
+            (self.end.z >= other.start.z) and
+            (self.start.z <= other.end.z);
+    }
+
+    fn split(self: Cuboid, other: Cuboid, tmp: std.ArrayList(Cuboid)) std.ArrayList(Cuboid) {
+        if (other.end.z > self.start.z
+        // caller asserts they intersect ?
+        return tmp;
+    }
+};
+
+test "cuboid intersect" {
+    const c1 = Cuboid{ .start = Point{ .x = 0, .y = 0, .z = 0 }, .end = Point{ .x = 10, .y = 10, .z = 10 }, .state = CuboidState.On };
+    const c2 = Cuboid{ .start = Point{ .x = 3, .y = 3, .z = 3 }, .end = Point{ .x = 8, .y = 8, .z = 8 }, .state = CuboidState.On };
+    const c3 = Cuboid{ .start = Point{ .x = 13, .y = 13, .z = 13 }, .end = Point{ .x = 14, .y = 14, .z = 14 }, .state = CuboidState.On };
+    const c4 = Cuboid{ .start = Point{ .x = 13, .y = 13, .z = 13 }, .end = Point{ .x = 13, .y = 13, .z = 13 }, .state = CuboidState.On };
+
+    try expect(c1.intersect(c2) == true);
+    try expect(c1.intersect(c3) == false);
+    try expect(c4.intersect(c4) == true);
+}
+
+pub fn genericPoint3d(comptime T: type) type {
+    return struct {
+        const Self = @This();
+
+        x: T,
+        y: T,
+        z: T,
+
+        pub fn eql(self: Self, other: Self) bool {
+            return std.meta.eql(self, other);
+        }
+
+        pub fn move(self: Self, x: T, y: T) Self {
+            return Self{ .x = self.x + x, .y = self.y + y, .z = self.z + z };
+        }
+    };
 }
