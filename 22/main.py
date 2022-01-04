@@ -34,7 +34,7 @@ def main():
     # pprint(new_reactor)
     print("-------- BLORG --------")
     # print(input_ranges[-1])
-    new_reactor = deep_split_l(new_reactor, input_ranges[-1], debug=True)
+    new_reactor = deep_split_l(new_reactor, input_ranges[-1], debug=False)
     # pprint(new_reactor)
     print("cumsum", sum(map(count_on, new_reactor)))
     print("done", time.time() - start_time)
@@ -46,7 +46,6 @@ def main():
             model[i][j] = [State.Off] * 100
 
     for input_r in input_ranges:
-        print(input_r)
         r = input_r
         for i in range(r.start, r.end + 1):
             r = input_r.value[0]
@@ -59,8 +58,11 @@ def main():
     for i in range(-50, 50):
         for j in range(-50, 50):
             for k in range(-50, 50):
-                if model[i][j][k] != probe(i,j,k, new_reactor):
-                    print(i, j, k, "AAAAA")
+                if model[i][j][k] == State.On:
+                    blorg += 1
+                # if model[i][j][k] != probe(i,j,k, new_reactor):
+                    # print(i, j, k, "AAAAA")
+    print(blorg)
 
 
 
@@ -94,8 +96,7 @@ class Range:
             return []
 
         if (self.start >= other.start and self.end <= other.end):
-            print(self, other)
-            return [self]
+            return [Range(self.start, self.end, self.value.copy())]
 
         l_split = other.start >= self.start
         r_split = other.end <= self.end
@@ -106,13 +107,13 @@ class Range:
             return [
                 Range(other.start, other.end, v.copy()),
                 Range(self.start, other.start - 1, v.copy()),
-                Range(other.end + 1, self.end, v),
+                Range(other.end + 1, self.end, v.copy()),
             ]
         elif r_split:
             assert self.start <= other.end <= self.end, f"{self.start} <= {other.end} <= {self.end}, {other.start}"
             return [
                 Range(self.start, other.end, v.copy()),
-                Range(other.end + 1, self.end, v),
+                Range(other.end + 1, self.end, v.copy()),
             ]
         elif l_split:
             # TODO: ???
@@ -213,7 +214,6 @@ def deep_split(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
     if isinstance(r, list):
         return deep_split_l(r, s, debug)
 
-    # print(r)
     prod = r.shallow_split(s)
     chosen = prod[0]
 
