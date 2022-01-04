@@ -26,17 +26,44 @@ def main():
     input_ranges = list(filter(bool, input_ranges))
 
     print("-------- BEGIN --------")
-    # list(map(print, reactor[0].shallow_split(input_ranges[0])))
-    new_reactor = deep_split(reactor, input_ranges[0])
-    new_reactor = deep_split_l(new_reactor, input_ranges[0])
-    print(reactor[0].complexity())
-    print(sum(map(lambda r: r.complexity(), new_reactor)))
+    new_reactor = reactor
+    for input_r in input_ranges[:-1]:
+        new_reactor = deep_split_l(new_reactor, input_r)
+        # print(sum(map(lambda r: r.complexity(), new_reactor)), input_r.value[0].value[0].value)
+
+    # pprint(new_reactor)
+    print("-------- BLORG --------")
+    # print(input_ranges[-1])
+    new_reactor = deep_split_l(new_reactor, input_ranges[-1], debug=True)
+    # pprint(new_reactor)
+    print("cumsum", sum(map(count_on, new_reactor)))
     print("done", time.time() - start_time)
 
+    model = [0] * 100
+    for i in range(-50, 50):
+        model[i] = [0] * 100
+        for j in range(-50, 50):
+            model[i][j] = [State.Off] * 100
 
-def pprint(rl):
-    list(map(print, rl))
-    return 
+    for input_r in input_ranges:
+        print(input_r)
+        r = input_r
+        for i in range(r.start, r.end + 1):
+            r = input_r.value[0]
+            for j in range(r.start, r.end + 1):
+                r = input_r.value[0].value[0]
+                for k in range(r.start, r.end + 1):
+                    model[i][j][k] = r.value
+
+    blorg = 0
+    for i in range(-50, 50):
+        for j in range(-50, 50):
+            for k in range(-50, 50):
+                if model[i][j][k] != probe(i,j,k, new_reactor):
+                    print(i, j, k, "AAAAA")
+
+
+
 
 class State(Enum):
     On = 1
@@ -60,11 +87,14 @@ class Range:
         return self.start < other.start
 
     def overlap(self: 'Range', other: 'Range') -> bool:
-        return other.end >= self.start or other.start <= self.end
+        return other.end >= self.start and other.start <= self.end
 
     def shallow_split(self: 'Range', other: 'Range') -> List['Range']:
-        # test
+        if (not self.overlap(other)):
+            return []
+
         if (self.start >= other.start and self.end <= other.end):
+            print(self, other)
             return [self]
 
         l_split = other.start >= self.start
@@ -94,6 +124,9 @@ class Range:
         else:
             assert 0, "unreachable"
 
+    def span(self):
+        return abs(self.start - self.end) + 1
+
     def __str__(self):
         return self._str()
 
@@ -115,12 +148,42 @@ class Range:
         else:
             return 1 + sum(r.complexity() for r in self.value)
 
+def probe(x, y, z, r):
+    rx = 0
+    while(r[rx].end < x):
+        rx += 1
 
-def deep_split_l(r: List['Range'], s: 'Range') -> List['Range']:
-    print("deep", r)
-    if isinstance(r, Range):
-        return deep_split(r, s) 
+    r = r[rx].value
+    ry = 0
+    while(r[ry].end < y):
+        ry += 1
 
+    r = r[ry].value
+
+    rz = 0
+    while(r[rz].end < z):
+        rz += 1
+
+    r = r[rz]
+
+    return r.value
+
+
+def count_on(r):
+    cur = r.span()
+
+    if isinstance(r.value, State):
+        if r.value == State.Off:
+            return 0
+        else:
+            return cur
+
+    times_cur = lambda x: x * cur
+    count_on_times_cur = lambda r: times_cur(count_on(r))
+
+    return sum(map(count_on_times_cur, r.value))
+
+def deep_split_l(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
     result = []
 
     # TODO: binsearch if I feel like it
@@ -132,8 +195,11 @@ def deep_split_l(r: List['Range'], s: 'Range') -> List['Range']:
     result += r[:r_idx]
 
     while(r[r_idx].overlap(s)):
-        result += deep_split_l(r[r_idx], s)
+        result += deep_split(r[r_idx], s, debug)
+
         r_idx += 1
+        if r_idx == len(r):
+            break
 
     # TODO: off by one?
     result += r[r_idx:]
@@ -141,24 +207,23 @@ def deep_split_l(r: List['Range'], s: 'Range') -> List['Range']:
 
 
 
-def deep_split(r: List['Range'], s: 'Range') -> 'Range':
+def deep_split(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
     if isinstance(r, list) and len(r) == 1:
         r = r[0]
+    if isinstance(r, list):
+        return deep_split_l(r, s, debug)
 
-    # if isinstance(r,list):
-        # print(r)
+    # print(r)
     prod = r.shallow_split(s)
-    
-    # assert prod[0].start == s.start
-    # assert prod[0].end == s.end
     chosen = prod[0]
 
     if isinstance(s.value, State):
+        if debug:
+            print(prod, prod.index(chosen))
         chosen.value = s.value
-        # TODO: sort!!!!
         return sorted(prod)
     else:
-        prod[0] = Range(prod[0].start, prod[0].end, deep_split(prod[0].value, s.value[0]))
+        prod[0] = Range(prod[0].start, prod[0].end, deep_split(prod[0].value, s.value[0], debug))
         return sorted(prod)
 
 
@@ -168,6 +233,7 @@ def parse_line(line):
     s = State.On if _s == "on" else State.Off
     cords = list(_cords)
 
+    # TODO: without this
     if any(abs(int(c)) > 50 for c in cords):
         return
 
@@ -176,6 +242,13 @@ def parse_line(line):
     z = Range(z0, z1, s)
     y = Range(y0, y1, [z])
     return Range(x0, x1, [y])
+
+
+def pprint(rl):
+    if not isinstance(rl, list):
+        rl = [rl]
+    list(map(print, rl))
+    return 
 
 
 if __name__ == "__main__":
