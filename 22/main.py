@@ -3,6 +3,7 @@ import functools
 import itertools
 import time
 import re
+import copy
 from enum import Enum
 from typing import Union, List
 from dataclasses import dataclass
@@ -18,6 +19,8 @@ def main():
     with open(fname) as f:
         lines = f.readlines()
         for l in lines:
+            if l.startswith("#"):
+                continue
             input_ranges.append(parse_line(l))
 
     REACTOR_SIZE = 10 ** 6
@@ -35,15 +38,18 @@ def main():
     print("-------- BLORG --------")
     # print(input_ranges[-1])
     new_reactor = deep_split_l(new_reactor, input_ranges[-1], debug=False)
-    # pprint(new_reactor)
-    print("cumsum", sum(map(count_on, new_reactor)))
+    pprint(new_reactor)
+    cumsum = sum(map(count_on, new_reactor))
+    print("cumsum", cumsum)
     print("done", time.time() - start_time)
 
-    model = [0] * 100
-    for i in range(-50, 50):
-        model[i] = [0] * 100
-        for j in range(-50, 50):
-            model[i][j] = [State.Off] * 100
+    model = [0] * 101
+    for _i in range(-50, 51):
+        i = _i
+        model[i] = [0] * 101
+        for _j in range(-50, 51):
+            j = _j
+            model[i][j] = [State.Off] * 101
 
     for input_r in input_ranges:
         r = input_r
@@ -55,14 +61,15 @@ def main():
                     model[i][j][k] = r.value
 
     blorg = 0
-    for i in range(-50, 50):
-        for j in range(-50, 50):
-            for k in range(-50, 50):
+    for _i in range(-50, 51):
+        for _j in range(-50, 51):
+            for _k in range(-50, 51):
+                i,j,k = _i, _j, _k
                 if model[i][j][k] == State.On:
                     blorg += 1
-                # if model[i][j][k] != probe(i,j,k, new_reactor):
-                    # print(i, j, k, "AAAAA")
-    print(blorg)
+                if model[i][j][k] != probe(_i,_j,_k, new_reactor):
+                    print(_i, _j, _k, "AAAAA")
+    print(blorg, blorg == cumsum)
 
 
 
@@ -92,35 +99,36 @@ class Range:
         return other.end >= self.start and other.start <= self.end
 
     def shallow_split(self: 'Range', other: 'Range') -> List['Range']:
+        v = self.value
+
         if (not self.overlap(other)):
             return []
 
         if (self.start >= other.start and self.end <= other.end):
-            return [Range(self.start, self.end, self.value.copy())]
+            return [Range(self.start, self.end, copy.deepcopy(v))]
 
         l_split = other.start >= self.start
         r_split = other.end <= self.end
         both_split = r_split and l_split
               
-        v = self.value
         if both_split:
             return [
-                Range(other.start, other.end, v.copy()),
-                Range(self.start, other.start - 1, v.copy()),
-                Range(other.end + 1, self.end, v.copy()),
+                Range(other.start, other.end, copy.deepcopy(v)),
+                Range(self.start, other.start - 1, copy.deepcopy(v)),
+                Range(other.end + 1, self.end, copy.deepcopy(v)),
             ]
         elif r_split:
             assert self.start <= other.end <= self.end, f"{self.start} <= {other.end} <= {self.end}, {other.start}"
             return [
-                Range(self.start, other.end, v.copy()),
-                Range(other.end + 1, self.end, v.copy()),
+                Range(self.start, other.end, copy.deepcopy(v)),
+                Range(other.end + 1, self.end, copy.deepcopy(v)),
             ]
         elif l_split:
             # TODO: ???
-            # assert other.start <= self.end <= self.start
+            assert self.start <= other.start <= self.end
             return [
-                Range(other.start, self.end, v),
-                Range(self.start, other.start - 1, v.copy()),
+                Range(other.start, self.end, copy.deepcopy(v)),
+                Range(self.start, other.start - 1, copy.deepcopy(v)),
             ]
         else:
             assert 0, "unreachable"
@@ -192,7 +200,6 @@ def deep_split_l(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
     while(not r[r_idx].overlap(s)):
         r_idx += 1
 
-    # TODO: off by one?
     result += r[:r_idx]
 
     while(r[r_idx].overlap(s)):
@@ -202,7 +209,6 @@ def deep_split_l(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
         if r_idx == len(r):
             break
 
-    # TODO: off by one?
     result += r[r_idx:]
     return result
 
