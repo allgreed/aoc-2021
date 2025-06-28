@@ -41,6 +41,7 @@ def main():
     pprint(cube_pool)
 
 
+# TODO: rather redundant, is it? ;)
 class Point3(BaseModel):
     x: int
     y: int
@@ -62,6 +63,8 @@ class LinearDistance:
     def distinc_sum(self, other: Self) -> Set["LinearDistance"]:
         """Sum expressed as up to 3 non-overlapping LinearDistances"""
         overlap = self.overlap(other)
+        # TODO: does this matter?
+        # actually, for non-overlapping distances this is just `{self, other}`
         assert overlap
 
         retval = {overlap}
