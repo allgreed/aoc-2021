@@ -1,260 +1,181 @@
 import sys
-import functools
-import itertools
-import time
 import re
-import copy
-from enum import Enum
-from typing import Union, List
+import operator
+from typing import Tuple, Self, Sequence, Set
 from dataclasses import dataclass
+from pprint import pprint
+from functools import reduce
 
-DA_REGEXP = re.compile(r"(on|off) x=(-?\d+)..(-?\d+),y=(-?\d+)..(-?\d+),z=(-?\d+)..(-?\d+)")
+import pytest
+from pydantic import BaseModel
 
 
 def main():
-    start_time = time.time()
     fname = sys.argv[1]
 
-    input_ranges = []
     with open(fname) as f:
-        lines = f.readlines()
-        for l in lines:
-            if l.startswith("#"):
-                continue
-            input_ranges.append(parse_line(l))
+        steps = filter(bool, map(parse_step, f.readlines()))
 
-    REACTOR_SIZE = 10 ** 6
-    reactor = [Range(-REACTOR_SIZE, REACTOR_SIZE, [Range(-REACTOR_SIZE, REACTOR_SIZE, [Range(-REACTOR_SIZE, REACTOR_SIZE, State.Off)])])]
+    cube_pool = []
+    for i, step in enumerate(steps):
+        print(i, step)
+        s, c = step
+        intersects = False
+        for oc in cube_pool: 
+            intersection = c.intersection(oc)
+            if intersection.volume > 0:
+                print("+", intersection)
+                intersects = True
+                print(c.distinc_sum(oc))
+                raise NotImplementedError("code me!")
+            else:
+                pass
 
-    input_ranges = list(filter(bool, input_ranges))
+        if not intersects:
+            if s is True:
+                cube_pool.append(c)
+            else:
+                # noop efectively
+                pass
 
-    print("-------- BEGIN --------")
-    new_reactor = reactor
-    for input_r in input_ranges[:-1]:
-        new_reactor = deep_split_l(new_reactor, input_r)
-        # print(sum(map(lambda r: r.complexity(), new_reactor)), input_r.value[0].value[0].value)
-
-    # pprint(new_reactor)
-    print("-------- BLORG --------")
-    # print(input_ranges[-1])
-    new_reactor = deep_split_l(new_reactor, input_ranges[-1], debug=False)
-    pprint(new_reactor)
-    cumsum = sum(map(count_on, new_reactor))
-    print("cumsum", cumsum)
-    print("done", time.time() - start_time)
-
-    model = [0] * 101
-    for _i in range(-50, 51):
-        i = _i
-        model[i] = [0] * 101
-        for _j in range(-50, 51):
-            j = _j
-            model[i][j] = [State.Off] * 101
-
-    for input_r in input_ranges:
-        r = input_r
-        for i in range(r.start, r.end + 1):
-            r = input_r.value[0]
-            for j in range(r.start, r.end + 1):
-                r = input_r.value[0].value[0]
-                for k in range(r.start, r.end + 1):
-                    model[i][j][k] = r.value
-
-    blorg = 0
-    for _i in range(-50, 51):
-        for _j in range(-50, 51):
-            for _k in range(-50, 51):
-                i,j,k = _i, _j, _k
-                if model[i][j][k] == State.On:
-                    blorg += 1
-                if model[i][j][k] != probe(_i,_j,_k, new_reactor):
-                    print(_i, _j, _k, "AAAAA")
-    print(blorg, blorg == cumsum)
+    pprint(cube_pool)
 
 
+class Point3(BaseModel):
+    x: int
+    y: int
+    z: int
 
 
-class State(Enum):
-    On = 1
-    Off = 0
-
-    def copy(self):
-        return self
-
-
-@functools.total_ordering
-@dataclass
-class Range:
+@dataclass(eq=True, frozen=True)
+class LinearDistance:
     start: int
     end: int
-    value: Union[List['Range'], State]
 
-    def __lt__(self, other):
-        if not isinstance(other, Range):
-            return NotImplemented
+    def overlap(self, other: Self) -> "LinearDistance":
+        if self.start > other.end or self.end < other.start:
+            return NullDistance()
 
-        return self.start < other.start
+        return LinearDistance(max(self.start, other.start),
+               min(self.end, other.end))
 
-    def overlap(self: 'Range', other: 'Range') -> bool:
-        return other.end >= self.start and other.start <= self.end
+    def distinc_sum(self, other: Self) -> Set["LinearDistance"]:
+        """Sum expressed as up to 3 non-overlapping LinearDistances"""
+        overlap = self.overlap(other)
+        assert overlap
 
-    def shallow_split(self: 'Range', other: 'Range') -> List['Range']:
-        v = self.value
+        retval = {overlap}
 
-        if (not self.overlap(other)):
-            return []
+        lhs = min(self.start, other.start)
+        rhs = max(self.end, other.end)
+        if lhs < overlap.start:
+            retval.add(LinearDistance(lhs, overlap.start - 1))
+        if rhs > overlap.end:
+           retval.add(LinearDistance(overlap.end + 1, rhs))
 
-        if (self.start >= other.start and self.end <= other.end):
-            return [Range(self.start, self.end, copy.deepcopy(v))]
+        assert 2 <= len(retval) <= 3, len(retval)
+        # TODO: assert retval don't overlap pairwise
+        return retval
 
-        l_split = other.start >= self.start
-        r_split = other.end <= self.end
-        both_split = r_split and l_split
-              
-        if both_split:
-            return [
-                Range(other.start, other.end, copy.deepcopy(v)),
-                Range(self.start, other.start - 1, copy.deepcopy(v)),
-                Range(other.end + 1, self.end, copy.deepcopy(v)),
-            ]
-        elif r_split:
-            assert self.start <= other.end <= self.end, f"{self.start} <= {other.end} <= {self.end}, {other.start}"
-            return [
-                Range(self.start, other.end, copy.deepcopy(v)),
-                Range(other.end + 1, self.end, copy.deepcopy(v)),
-            ]
-        elif l_split:
-            # TODO: ???
-            assert self.start <= other.start <= self.end
-            return [
-                Range(other.start, self.end, copy.deepcopy(v)),
-                Range(self.start, other.start - 1, copy.deepcopy(v)),
-            ]
-        else:
-            assert 0, "unreachable"
-
-    def span(self):
-        return abs(self.start - self.end) + 1
-
-    def __str__(self):
-        return self._str()
-
-    def _str(self, idx=0):
-        tab = "\t" * idx
-        if isinstance(self.value, State):
-            sub = tab + "\t" + str(self.value)
-        else:
-            sub = "\n".join(s._str(idx+1) for s in self.value)
-        result = f"""{tab}start= {self.start}
-{tab}end= {self.end}
-{sub}"""
-
-        return result
-
-    def complexity(self):
-        if isinstance(self.value, State):
-            return 1
-        else:
-            return 1 + sum(r.complexity() for r in self.value)
-
-def probe(x, y, z, r):
-    rx = 0
-    while(r[rx].end < x):
-        rx += 1
-
-    r = r[rx].value
-    ry = 0
-    while(r[ry].end < y):
-        ry += 1
-
-    r = r[ry].value
-
-    rz = 0
-    while(r[rz].end < z):
-        rz += 1
-
-    r = r[rz]
-
-    return r.value
-
-
-def count_on(r):
-    cur = r.span()
-
-    if isinstance(r.value, State):
-        if r.value == State.Off:
+    def __len__(self):
+        if self.end < self.start:
             return 0
-        else:
-            return cur
 
-    times_cur = lambda x: x * cur
-    count_on_times_cur = lambda r: times_cur(count_on(r))
+        return(abs(self.start - self.end) + 1)
 
-    return sum(map(count_on_times_cur, r.value))
+    def __bool__(self):
+        return bool(len(self))
 
-def deep_split_l(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
-    result = []
-
-    # TODO: binsearch if I feel like it
-    r_idx = 0
-    while(not r[r_idx].overlap(s)):
-        r_idx += 1
-
-    result += r[:r_idx]
-
-    while(r[r_idx].overlap(s)):
-        result += deep_split(r[r_idx], s, debug)
-
-        r_idx += 1
-        if r_idx == len(r):
-            break
-
-    result += r[r_idx:]
-    return result
+D = LinearDistance
+@pytest.mark.parametrize("shuffle", [0, 1])
+@pytest.mark.parametrize("a,b,result", [
+    (D(1,2), D(1,3), {D(1,2), D(3,3)}),
+    (D(2,2), D(1,3), {D(1,1), D(2,2), D(3,3)}),
+    (D(2,3), D(1,3), {D(1,1), D(2,3)}),
+])
+def test_distinct_linar_sum(a, b, result, shuffle):
+    if shuffle:
+        a, b = b, a
+    assert a.distinc_sum(b) == result
 
 
+@dataclass(eq=True, frozen=True)
+class Cuboid:
+    xd: LinearDistance
+    yd: LinearDistance
+    zd: LinearDistance
 
-def deep_split(r: List['Range'], s: 'Range', debug=False) -> List['Range']:
-    if isinstance(r, list) and len(r) == 1:
-        r = r[0]
-    if isinstance(r, list):
-        return deep_split_l(r, s, debug)
+    @classmethod
+    def from_Point3s(cls, start, end):
+        return cls(
+        LinearDistance(start.x, end.x),
+        LinearDistance(start.y, end.y),
+        LinearDistance(start.z, end.z),
+        )
 
-    prod = r.shallow_split(s)
-    chosen = prod[0]
+    @property
+    def volume(self):
+        return reduce(operator.mul, map(len, [self.xd, self.yd, self.zd]), 1)
 
-    if isinstance(s.value, State):
-        if debug:
-            print(prod, prod.index(chosen))
-        chosen.value = s.value
-        return sorted(prod)
-    else:
-        prod[0] = Range(prod[0].start, prod[0].end, deep_split(prod[0].value, s.value[0], debug))
-        return sorted(prod)
+    def intersection(self, other: Self) -> "Cuboid":
+        return Cuboid(
+            self.xd.overlap(other.xd),
+            self.yd.overlap(other.yd),
+            self.zd.overlap(other.zd),
+        )
 
+    # TODO: is there a name for this?
+    def distinc_sum(self, other: Self) -> Sequence["Cuboid"]:
+        """Sum expressed as up to 7 non-overlapping Cuboids"""
+        # TODO: contruct cuboids from combination of distinc_sums of component distances - figure out how!
+        retval = []
 
-
-def parse_line(line):
-    _s, *_cords = DA_REGEXP.match(line).groups()
-    s = State.On if _s == "on" else State.Off
-    cords = list(_cords)
-
-    # TODO: without this
-    if any(abs(int(c)) > 50 for c in cords):
-        return
-
-    x0, x1, y0, y1, z0, z1 = map(int, cords)
-
-    z = Range(z0, z1, s)
-    y = Range(y0, y1, [z])
-    return Range(x0, x1, [y])
+        assert 2 < len(retval) <= 7
+        return retval
 
 
-def pprint(rl):
-    if not isinstance(rl, list):
-        rl = [rl]
-    list(map(print, rl))
-    return 
+def test_volume():
+    _, c = parse_step("on x=10..12,y=10..12,z=10..12")
+    assert c.volume == 27
+
+@pytest.mark.parametrize("steps, volume", [
+    (["on x=1..1,y=1..1,z=1..1", "on x=2..2,y=2..2,z=2..2"], 0),
+    (["on x=10..12,y=10..12,z=10..12", "on x=11..13,y=11..13,z=11..13"], 27 - 19),
+])
+def test_intersection(steps, volume):
+    assert len(steps) == 2
+    _, c1 = parse_step(steps[0])
+    _, c2 = parse_step(steps[1])
+
+    assert c1.intersection(c2).volume == volume
+
+
+DA_REGEXP = re.compile(r"(on|off) x=(-?\d+)..(-?\d+),y=(-?\d+)..(-?\d+),z=(-?\d+)..(-?\d+)")
+
+# it's actually Optional[...], however linter won't shut up about it above
+# where I need to focus
+def parse_step(line: str) -> Tuple[bool, Cuboid]:
+    # custom: for ease of testing
+    if line.startswith("#"):
+        return None
+
+    state_string, *string_cords = DA_REGEXP.match(line).groups()
+
+    x0, x1, y0, y1, z0, z1 = map(int, string_cords)
+    state = True if state_string == "on" else False
+
+    start = Point3(x=x0, y=y0, z=z0)
+    end = Point3(x=x1, y=y1, z=z1)
+    c = Cuboid.from_Point3s(start=start, end=end)
+    return (state, c)
+
+
+class NullDistance(LinearDistance):
+    def __init__(self):
+        pass
+
+    def __len__(self):
+        return 0
 
 
 if __name__ == "__main__":

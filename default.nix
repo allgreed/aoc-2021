@@ -15,13 +15,18 @@ let
       sympy
       scipy
       z3
+      pydantic
+      pytest
     ]; 
   myPython = pythonCore.withPackages pythonPkgs;
 in
 pkgs.mkShell {
-  buildInputs = with pkgs; [
+  packages = with pkgs; [
     zig
     #zls
+    pyright
+    ruff
+    #ruff-lsp
     myPython
   ];
   }
