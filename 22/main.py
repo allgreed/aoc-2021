@@ -1,6 +1,7 @@
 import sys
 import re
 import operator
+import itertools
 from typing import Tuple, Self, Sequence, Set
 from dataclasses import dataclass
 from pprint import pprint
@@ -21,15 +22,26 @@ def main():
         print(i, step)
         s, c = step
         intersects = False
+        pool_additions = []
         for oc in cube_pool: 
             intersection = c.intersection(oc)
             if intersection.volume > 0:
                 print("+", intersection)
                 intersects = True
-                print(c.distinc_sum(oc))
-                raise NotImplementedError("code me!")
+                distinct_sum = c.distinc_sum(oc)
+
+                if s is True:
+                    for sub_cuboid in distinct_sum:
+                        if sub_cuboid.intersection(oc).volume == 0:
+                            pool_additions.append(sub_cuboid)
+                elif s is False:
+                    # TODO: add all subcuboids except the one representing "c"
+                    raise NotImplementedError("code me!")
+                else:
+                    assert 0, "unreachable"
             else:
                 pass
+        cube_pool += pool_additions
 
         if not intersects:
             if s is True:
@@ -39,13 +51,7 @@ def main():
                 pass
 
     pprint(cube_pool)
-
-
-# TODO: rather redundant, is it? ;)
-class Point3(BaseModel):
-    x: int
-    y: int
-    z: int
+    print(sum(c.volume for c in cube_pool))
 
 
 @dataclass(eq=True, frozen=True)
@@ -76,7 +82,7 @@ class LinearDistance:
         if rhs > overlap.end:
            retval.add(LinearDistance(overlap.end + 1, rhs))
 
-        assert 2 <= len(retval) <= 3, len(retval)
+        assert 2 <= len(retval) <= 3
         # TODO: assert retval don't overlap pairwise
         return retval
 
@@ -88,6 +94,9 @@ class LinearDistance:
 
     def __bool__(self):
         return bool(len(self))
+
+    def __repr__(self):
+        return f"{self.start}..{self.end}" if self.start != self.end else str(self.start)
 
 D = LinearDistance
 @pytest.mark.parametrize("shuffle", [0, 1])
@@ -108,14 +117,6 @@ class Cuboid:
     yd: LinearDistance
     zd: LinearDistance
 
-    @classmethod
-    def from_Point3s(cls, start, end):
-        return cls(
-        LinearDistance(start.x, end.x),
-        LinearDistance(start.y, end.y),
-        LinearDistance(start.z, end.z),
-        )
-
     @property
     def volume(self):
         return reduce(operator.mul, map(len, [self.xd, self.yd, self.zd]), 1)
@@ -129,11 +130,30 @@ class Cuboid:
 
     # TODO: is there a name for this?
     def distinc_sum(self, other: Self) -> Sequence["Cuboid"]:
-        """Sum expressed as up to 7 non-overlapping Cuboids"""
-        # TODO: contruct cuboids from combination of distinc_sums of component distances - figure out how!
-        retval = []
+        """Sum expressed as non-overlapping Cuboids"""
+        # contruct cuboids from combination of distinc_sums of component distances
+        xx = self.xd.distinc_sum(other.xd)
+        yy = self.yd.distinc_sum(other.yd)
+        zz = self.zd.distinc_sum(other.zd)
 
-        assert 2 < len(retval) <= 7
+        # TODO: nicer - with Product?
+        retval = []
+        i = 0
+        for xd in xx:
+            for yd in yy:
+                for zd in zz:
+                    i += 1
+                    c = Cuboid(xd, yd, zd)
+
+                    if c.volume > 0 and (c.intersection(self).volume == c.volume or c.intersection(other).volume == c.volume):
+                        retval.append(c)
+
+        # TODO: assert subcubes belong to either self or other ;)
+
+        assert 2 < len(retval) <= 3 ** 3
+        # TODO: assert they don't overlap pairwise
+            # generate pairs - will this be an insance number?
+            # assert they don't overlap
         return retval
 
 
@@ -164,12 +184,9 @@ def parse_step(line: str) -> Tuple[bool, Cuboid]:
 
     state_string, *string_cords = DA_REGEXP.match(line).groups()
 
-    x0, x1, y0, y1, z0, z1 = map(int, string_cords)
+    c = Cuboid(*map(LinearDistance, *zip(*itertools.batched(map(int, string_cords), n=2))))
     state = True if state_string == "on" else False
 
-    start = Point3(x=x0, y=y0, z=z0)
-    end = Point3(x=x1, y=y1, z=z1)
-    c = Cuboid.from_Point3s(start=start, end=end)
     return (state, c)
 
 
