@@ -8,7 +8,6 @@ from pprint import pprint
 from functools import reduce
 
 import pytest
-from pydantic import BaseModel
 
 
 def main():
@@ -23,25 +22,29 @@ def main():
         s, c = step
         intersects = False
         pool_additions = []
+        pool_removals = []
         for oc in cube_pool: 
             intersection = c.intersection(oc)
             if intersection.volume > 0:
-                print("+", intersection)
+                # print("+", intersection)
                 intersects = True
                 distinct_sum = c.distinc_sum(oc)
 
-                if s is True:
-                    for sub_cuboid in distinct_sum:
-                        if sub_cuboid.intersection(oc).volume == 0:
-                            pool_additions.append(sub_cuboid)
-                elif s is False:
-                    # TODO: add all subcuboids except the one representing "c"
-                    raise NotImplementedError("code me!")
-                else:
-                    assert 0, "unreachable"
+                for sub_cuboid in distinct_sum:
+                    if sub_cuboid.intersection(oc).volume == 0:
+                        pool_additions.append(sub_cuboid)
+
+                match s:
+                    case True:
+                        pass
+                    case False:
+                        pool_removals.append(oc)
             else:
                 pass
+
         cube_pool += pool_additions
+        for c in pool_removals:
+            cube_pool.remove(c)
 
         if not intersects:
             if s is True:
@@ -50,7 +53,9 @@ def main():
                 # noop efectively
                 pass
 
-    pprint(cube_pool)
+        print(len(cube_pool))
+
+    # pprint(cube_pool)
     print(sum(c.volume for c in cube_pool))
 
 
